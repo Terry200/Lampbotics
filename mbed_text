@@ -1,0 +1,54 @@
+#include "mbed.h"
+#include "C12832.h"
+#include <string>
+// ENSURE servo Lib mod for 180^o
+#include "Servo.h"
+//LCD
+C12832 lcd(p5, p7, p6, p8, p11);
+//SErvo 1 & 2
+Servo servopan(p21);
+Servo servotilt(p22);
+//Serial
+Serial pc(USBTX, USBRX);
+// Buffer
+char *token;
+char buffer[128];
+int f,d,x,y;
+
+int main()
+{   
+    //char input[] = "Face01x-11y012d012";
+    //char *token;
+    
+    pc.baud(9600);
+    lcd.cls();
+    while(1) {               
+                //char input[] = "Face01x-11y012d012";
+                //lcd.cls();
+                pc.gets(buffer,18);  
+                token = strtok(buffer, "'' Fxyd");
+                lcd.locate(0,0);
+                lcd.printf("%s\n", buffer);
+                // THIS IS THE FLAG OF AN OBJECT.  THE F should be extracted somehow, then add O for object or something
+                f = atoi(token);
+                token = strtok(NULL, " '' Fxyd");
+                lcd.locate(0,8);
+                //lcd.printf("t = %s\n", token);
+                x = atoi(token);
+                //x = (int)(token);
+                token = strtok(NULL, "'' Fxyd");
+                //lcd.printf("token = %s\n", token);
+                y = atoi(token);
+                //y = (int)(token);
+                token = strtok(NULL, "'' Fxyd");
+                //lcd.printf("token = %s\n", token);
+                d = atoi(token);
+                lcd.locate(0,17);
+                
+                lcd.printf("f=%d; x=%d; y=%d d=%d; \n", f, x, y,d);
+                // Servo positions
+                // Rough needs control 
+                servopan.write(x+80);
+                servotilt.write(y+80);    
+        }
+    }
