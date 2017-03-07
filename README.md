@@ -12,3 +12,5 @@ Store in location and run from cmd line (C:\location>python cam.py)
 copy to online compiler.
 Ensure servo mod:
 https://developer.mbed.org/teams/RedBearLab/code/BLENano_SimpleControls/
+#Quick ref for using git:
+https://www.youtube.com/watch?v=Y9XZQO1n_7c
