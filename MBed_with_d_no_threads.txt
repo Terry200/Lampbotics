@@ -1,0 +1,103 @@
+
+#include "mbed.h"
+#include "C12832.h"
+#include <string>
+#include "Servo.h"
+
+C12832 lcd(p5, p7, p6, p8, p11);
+//SErvo 1 & 2
+Servo servopan(p21);
+Servo servotilt(p22);
+Servo servotiltd(p23);
+//Serial
+Serial pc(USBTX, USBRX);
+// Buffer
+char *token;
+char buffer[128];
+int f,d,x,y,yt;
+
+int main()
+{   
+
+servopan.write(85);     //initialise position
+servotilt.write(45);    //initialise position
+servotiltd.write(85);   //initialise position
+
+pc.baud(9600);
+lcd.cls();
+while(1) {               
+
+            pc.gets(buffer,18);  
+            token = strtok(buffer, "'' Fxyd");
+            lcd.locate(0,0);
+            lcd.printf("%s\n", buffer);
+           
+            f = atoi(token);                    // Get face #
+            token = strtok(NULL, " '' Fxyd");
+            lcd.locate(0,8);
+            //lcd.printf("t = %s\n", token);
+            x = atoi(token);                    // Det x pos
+            //x = (int)(token);
+            token = strtok(NULL, "'' Fxyd");
+            //lcd.printf("token = %s\n", token);
+            y = atoi(token);                    // Get y Pos
+            //y = (int)(token);
+            token = strtok(NULL, "'' Fxyd");
+            //lcd.printf("token = %s\n", token);
+            d = atoi(token);                    // Get D pos
+            lcd.locate(0,17);
+            yt = y;                             // Set new vari for d outside sweetspot
+            lcd.printf("f=%d; x=%d; y=%d d=%d; \n", f, x, y,d);
+
+//******************************* Pan ***************************************            
+            if (f == 1)                     // Only enter for face # 1
+            {
+                if((x+85)<10)             // to prevent 180 degree swing
+                    {
+                        servopan.write(10); // Pan min
+                    }
+                    else if((x+85)>170)
+                    {
+                        servopan.write(170);    // pan max
+                    }
+                    else {
+                    servopan.write(85+x);       // Else write to servo
+                    }
+        //****************************** End of pan ************************************* 
+                    if((yt+45)<5)             // to prevent 90 degree swing
+                    {
+                        yt = 10;
+                    }
+                    else if((yt+45)>90)
+                    {
+                        yt = 85;   //to prevent 180 degree swing
+                    }
+                    if((y+85)<5)             // to prevent 180 degree swing
+                    {
+                        y = 10;
+                    }
+                    else if((y+85)>175)
+                    {
+                        y = 175;   //to prevent 180 degree swing
+                    }
+                    
+                    if(d<120)   //when user is close 
+                    {
+                        servotilt.write(yt+45);
+                        servotiltd.write(y+85);
+                    }
+                    else if(d>180)   //when user is far away
+                    {
+                        servotilt.write(yt+45);
+                        servotiltd.write(y+85);
+                    }
+                    else  //when user is at comfort zone
+                    {
+                        servotilt.write(y+45);
+                        servotiltd.write(85);
+                        
+                    }
+            }
+            wait(0.1);    // Delay of 10 ms
+    }
+}
