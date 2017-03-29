@@ -5,16 +5,13 @@ import serial, time, numpy as np
 BUFFER = buffer_struct(Type, i,xygo,DISTANCE)
 if DEBUG:
 	print("BUFFER",BUFFER)
-if WRITE:				# Set up serial
-	ser=serial.Serial(port='COM3',baudrate=9600,timeout=0)
-	ser.write('r')
-	ser.write(str(BUFFER))
-if DEBUG:
-	print control
-face_cascade = cv2.CascadeClassifier('haarcascade_frontalface_default.xml')
-video_capture = cv2.VideoCapture(0)
-video_capture.set(cv2.CAP_PROP_FPS, 60.0)
-#SET UP VIDEO
+if WRITE:																				# Set up serial
+	ser=serial.Serial(port='COM3',baudrate=9600,timeout=0)								# Change com if Needed
+	ser.write(str(BUFFER))																# Write data																
+face_cascade = cv2.CascadeClassifier('haarcascade_frontalface_default.xml')				# Face detect
+video_capture = cv2.VideoCapture(0)														# Set up video capture
+video_capture.set(cv2.CAP_PROP_FPS, 60.0)												# Set FPS ( NOT CORRECT)
+#SET UP VIDEO Frame
 if vid_width is None:
 	vid_width = int(video_capture.get(cv2.CAP_PROP_FRAME_WIDTH))
 else:
@@ -69,20 +66,26 @@ while True:
 				cv2.circle(frame2, (int(x), int(y)), int(radius),
 					(0, 255, 255), 2)
 				cv2.circle(frame2, centero, 5, (0, 0, 255), -1)
-		pts.appendleft(centero)														# update the points queue
-		for i in xrange(1, len(pts)):												# loop over the set of tracked points
+				xygo = ( ( (cam_c[0]-centero[0])/(vid_width/CONVERT) ),( (cam_c[1]-centero[1])/(vid_height/CONVERT) ) )			# Convert pixels to Degree
+				BUFFER = buffer_struct(1, 1,xygo,0)																				# BUFFER SET UP No Distance
+				if xygo is not None:					                                                            			# Controls Buffer
+					control[1] = xygo																							# Set Control Check
+					control = buffer_write(control, BUFFER,ser)	
+		pts.appendleft(centero)																									# update the points queue
+		for i in xrange(1, len(pts)):																							# loop over the set of tracked points
 			# if either of the tracked points are None, ignore them
 			if pts[i - 1] is None or pts[i] is None:
 				continue
-			thickness = int(np.sqrt(args["buffer"] / float(i + 1)) * 2.5)			# otherwise, compute the thickness of the line and
-			cv2.line(frame2, pts[i - 1], pts[i], (0, 0, 255), thickness)			# draw the connecting lines
+			thickness = int(np.sqrt(args["buffer"] / float(i + 1)) * 2.5)														# otherwise, compute the thickness of the line and
+			cv2.line(frame2, pts[i - 1], pts[i], (0, 0, 255), thickness)														# draw the connecting lines
 		if DEBUG:
-			print"radius", radius													# DEBUG PRINTS
+			print"radius", radius																								# DEBUG PRINTS
 			print"center", centero
-			print "Line len", len(pts)
+			print "Line len", len(BUFFER)
+			print "Buffer", BUFFER
 	#Find faces
-	if not OBJECT:
-		faces = face_cascade.detectMultiScale(gray_image,
+	if not OBJECT:																												# Toggles object/Face
+		faces = face_cascade.detectMultiScale(gray_image,																		# Use cascade
 											  scaleFactor=1.2,
 											  minNeighbors=5,
 											  minSize=(30, 30),
@@ -110,7 +113,7 @@ while True:
 				BUFFER = buffer_struct(Type, i,xygo,DISTANCE)																		# "T"+'{:01d}'.format(Type)+
 				if xygo is not None:					                                                            				# Controls Buffer
 					control[1] = xygo																								# Set Control Check
-					control = buffer_write(control, BUFFER)																			# Buffer write, Updates control
+					control = buffer_write(control, BUFFER,ser)																			# Buffer write, Updates control
 				if DEBUG:
 					# Comment out what you dont want to see
 					#print(i)												# Face Number

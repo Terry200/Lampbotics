@@ -1,54 +1,307 @@
 #include "mbed.h"
-#include "C12832.h"
-#include <string>
-// ENSURE servo Lib mod for 180^o
 #include "Servo.h"
-//LCD
+#include "rtos.h"
+#include "C12832.h"
+#include "string"
+#include "cstring"
+
+#define SERVO_PIN p21
+#define SERVO2_PIN p22
+#define SERVO3_PIN p23
+ 
+Serial pc(USBTX, USBRX); // tx, rx 
+Servo servo_pan(SERVO_PIN);
+Servo servo_tilt(SERVO2_PIN);
+Servo servo_lean(SERVO3_PIN);
+BusIn joy(p15,p12,p13,p16);
+
+bool debug = 0;
+
 C12832 lcd(p5, p7, p6, p8, p11);
-//SErvo 1 & 2
-Servo servopan(p21);
-Servo servotilt(p22);
-//Serial
-Serial pc(USBTX, USBRX);
-// Buffer
+
 char *token;
 char buffer[128];
-int f,d,x,y;
+int T,F,d,x,y,yt;
 
-int main()
-{   
-    //char input[] = "Face01x-11y012d012";
-    //char *token;
+int pan_degree = 85;
+int tilt_degree = 85;
+int lean_degree = 85;
+
+
+int tw = 100;            // thread wait value
+
+typedef struct {
+    int pan_degree;   // Pan servo angle 
+} pan_message_t;
+
+typedef struct {
+    int tilt_degree;   // Tilt servo angle 
+} tilt_message_t;
+
+typedef struct {
+    int lean_degree;   // lean servo angle 
+} lean_message_t;
+
+MemoryPool<pan_message_t, 16> mpool_pan; // memory pool for pan servo
+Queue<pan_message_t, 16> queue_pan;      // queue for pan servo
+
+MemoryPool<tilt_message_t, 16> mpool_tilt; // memory pool for tilt servo
+Queue<tilt_message_t, 16> queue_tilt;      // queue for tilt servo
+
+MemoryPool<lean_message_t, 16> mpool_lean; // memory pool for lean servo
+Queue<lean_message_t, 16> queue_lean;      // queue for lean servo
+
+/*
+// new thread for serial interface with face team 
+void serial_buffer(void const *args) 
+        {   
+        pc.printf("Thread buffer\n");            
+         //pc.gets(buffer,17);
+            char buffer[] = "T0F1x047y014d052";  
+            lcd.locate(0,0);
+            lcd.printf("%s\n", buffer);
+            token = strtok(buffer, " '' TFxyd");
+            T = atoi(token);
+            token = strtok(NULL, " '' TFxyd");
+            F = atoi(token);                    // Get face #
+            token = strtok(NULL, " '' TFxyd");
+            x = atoi(token);                    // Det x pos
+            token = strtok(NULL, "'' TFxyd");
+            y = atoi(token);                    // Get y Pos
+            token = strtok(NULL, "'' TFxyd");
+            d = atoi(token);                    // Get D pos
+            lcd.locate(0,21);
+            //lcd.locate(0,17);
+            yt = y;                             // Set new vari for d outside sweetspot
+            //pc.printf("T=%d F=%d y=%d x=%d d=%d = \n",T,F,x y,d);
+            
+        if(x+85<170 && x+85>10) 
+        {
+            pan_degree = x+85;   // increase pan servo angle
+            pc.printf("pandegree=%d \n",pan_degree );
+            pan_message_t *pan_mes = mpool_pan.alloc();
+            pan_mes->pan_degree=pan_degree;  // load degrees into pan_mes
+            queue_pan.put(pan_mes); // load degrees into pan queue
+        }
+        else if(y+85<170 && y+85>10) 
+        {
+            tilt_degree = y+85;
+            tilt_message_t *tilt_mes = mpool_tilt.alloc();
+            tilt_mes->tilt_degree = tilt_degree;
+            queue_tilt.put(tilt_mes);
+        }
+        else if(d<170 && d>10)
+        {
+            lean_degree = d;
+            lean_message_t *lean_mes = mpool_lean.alloc();
+            lean_mes->lean_degree = lean_degree;
+            queue_lean.put(lean_mes);
+        }
+        pc.printf("Thread buffer end\n");
+        Thread::wait(tw);
+        
+}  
+*/
+
+
+void lean_servo(void const *args) { // lean servo thread
+     while (true) 
+    {
+        //pc.printf("Thread Lean start\n");
+        osEvent evt = queue_lean.get();
+        if (evt.status == osEventMessage) 
+        {
+            lean_message_t *lean_mes = (lean_message_t*)evt.value.p;
+            servo_lean.write(lean_mes->lean_degree);
+           // pc.printf("Thread Lean mess = %d \n", &lean_mes);
+            pc.printf("Thread Lean deg = %d \n", lean_degree);
+            mpool_lean.free(lean_mes);
+        }  
+        //pc.printf("Thread Lean end\n");
+        Thread::wait(tw);
+    }
+}
+
+
+void pan_servo(void const *args) 
+{
+    while (true) 
+    {
+        //pc.printf("Thread pan start\n");
+        osEvent evt = queue_pan.get();
+        if (evt.status == osEventMessage) 
+        {
+            pan_message_t *pan_mes = (pan_message_t*)evt.value.p;
+            servo_pan.write(pan_mes->pan_degree);
+            //pc.printf("Thread pan mess = %d \n", &pan_mes);
+             pc.printf("Thread pan deg = %d \n", pan_degree);
+            mpool_pan.free(pan_mes);
+        }
+        //pc.printf("Thread pan end\n");  
+        Thread::wait(tw);
+    }
+}
+
+void tilt_servo(void const *args) 
+{
+    while (true) 
+    {
+        //pc.printf("Thread tilt start\n");
+        osEvent evt = queue_tilt.get();
+        if (evt.status == osEventMessage) 
+        {
+            tilt_message_t *tilt_mes = (tilt_message_t*)evt.value.p;
+            servo_tilt.write(tilt_mes->tilt_degree);
+            //pc.printf("Thread tilt mess = %d \n", &tilt_mes);
+             pc.printf("Thread tilt deg = %d \n", tilt_degree);
+            mpool_tilt.free(tilt_mes);
+        }
+        //pc.printf("Thread tilt end\n");
+        Thread::wait(tw);
+    }
+}
+ 
+int main(void const *args) {
+    Thread thread1(lean_servo);
+    Thread thread2(pan_servo);
+    Thread thread3(tilt_servo);
     
     pc.baud(9600);
     lcd.cls();
-    while(1) {               
-                //char input[] = "Face01x-11y012d012";
-                //lcd.cls();
-                pc.gets(buffer,18);  
-                token = strtok(buffer, "'' Fxyd");
-                lcd.locate(0,0);
-                lcd.printf("%s\n", buffer);
-                // THIS IS THE FLAG OF AN OBJECT.  THE F should be extracted somehow, then add O for object or something
-                f = atoi(token);
-                token = strtok(NULL, " '' Fxyd");
-                lcd.locate(0,8);
-                //lcd.printf("t = %s\n", token);
-                x = atoi(token);
-                //x = (int)(token);
-                token = strtok(NULL, "'' Fxyd");
-                //lcd.printf("token = %s\n", token);
-                y = atoi(token);
-                //y = (int)(token);
-                token = strtok(NULL, "'' Fxyd");
-                //lcd.printf("token = %s\n", token);
-                d = atoi(token);
-                lcd.locate(0,17);
-                
-                lcd.printf("f=%d; x=%d; y=%d d=%d; \n", f, x, y,d);
-                // Servo positions
-                // Rough needs control 
-                servopan.write(x+80);
-                servotilt.write(y+80);    
+    pc.printf(" start\n");
+    servo_pan.write(85); // inital position
+    servo_tilt.write(85); // inital position
+    servo_lean.write(85); // inital position
+    
+    //Thread thread(serial_buffer);
+    pc.printf("Thread 4 \n");
+    // up =4, down = 8, right = 1, left = 2 - joystick direction values
+    if(debug)
+    {
+        while (true) 
+        {
+            if(joy ==1 && pan_degree<155) 
+            {
+                pan_degree = pan_degree + 2;    // increase pan servo angle
+                pan_message_t *pan_mes = mpool_pan.alloc();
+                pan_mes->pan_degree=pan_degree;  // load degrees into pan_mes
+                queue_pan.put(pan_mes); // load degrees into pan queue
+            }
+            else if(joy ==2 && pan_degree>50) 
+            {
+                pan_degree = pan_degree - 2;    // decrease pan servo angle
+                pan_message_t *pan_mes = mpool_pan.alloc();
+                pan_mes->pan_degree = pan_degree;    
+                queue_pan.put(pan_mes);
+            }
+            if(joy ==1 && tilt_degree<110)
+            {
+                tilt_degree = tilt_degree + 2;
+                tilt_message_t *tilt_mes = mpool_tilt.alloc();
+                tilt_mes->tilt_degree = tilt_degree;
+                queue_tilt.put(tilt_mes);
+            }
+            else if(joy == 8 && tilt_degree>10)
+            {
+                tilt_degree = tilt_degree - 2;
+                tilt_message_t *tilt_mes = mpool_tilt.alloc();
+                tilt_mes->tilt_degree = tilt_degree;
+                queue_tilt.put(tilt_mes);
+            }
+            Thread::wait(tw);
         }
     }
+    else
+    {
+            while(true)
+            {
+            //pc.printf("Thread buffer\n");            
+            pc.gets(buffer,17);
+            //char buffer[] = "T0F1x047y014d052";  
+            lcd.locate(0,0);
+            lcd.printf("%s\n", buffer);
+            token = strtok(buffer, " '' TFxyd");
+            T = atoi(token);
+            token = strtok(NULL, " '' TFxyd");
+            F = atoi(token);                    // Get face #
+            token = strtok(NULL, " '' TFxyd");
+            x = atoi(token);
+            pc.printf("%d", x);                    // Det x pos
+            token = strtok(NULL, "'' TFxyd");
+            y = atoi(token);                    // Get y Pos
+            token = strtok(NULL, "'' TFxyd");
+            d = atoi(token);                    // Get D pos
+            lcd.locate(0,21);
+            //lcd.locate(0,17);
+            yt = y;                             // Set new vari for d outside sweetspot
+            lcd.printf("y=%d x=%d D=%d",x, y,d);
+            
+        
+        
+        if(x+85<170 && x+85>10)                 // Control for x
+        {
+            pan_degree = x+85;                  // HAPPY region
+            //pc.printf(" = %d \n", lean_degree);    
+        }
+        else if(x+85>170)
+        {
+            pan_degree = 170;                   // MAX
+        }
+        else if(x+85<10)
+        {
+            pan_degree = 10;                    // MIN
+        }
+        
+        if(y+85<110 && x+85>50)                 // CONTROL for Y
+        {
+            tilt_degree = y+85;                 // HAPPY region
+            
+        }
+        else if(y+85>110)                       // MAX
+        {
+            tilt_degree = 110;    
+        }
+        else if(y+85<50)
+        {
+            tilt_degree = 50;                   //MIN
+        }
+
+        if(d<180 && d>160)                      // D control for lean NEEDS WORK!!!!!!!!
+        {
+            lean_degree = 85;                   // HAPPY
+        }
+        else if(d<=160)
+        {
+            //pc.printf("Ditance should move back\n HOW FAR?????? 60");
+            //tilt_degree = tilt_degree - 2;
+            lean_degree = 110;    
+        }
+        else if(d >= 180)
+        {
+            //pc.printf("Ditance should move forward\n HOW FAR??????");
+            //tilt_degree = tilt_degree - 2;    
+            lean_degree = 60;
+        }
+        //pc.printf("pandegree=%d \n",pan_degree );
+        //pc.printf("tiltdegree=%d \n",tilt_degree );
+        //pc.printf("leanegree=%d \n",lean_degree );
+        //pc.printf("pan mess = %d \n", pan_mess);
+        pan_message_t *pan_mes = mpool_pan.alloc();
+        pan_mes->pan_degree=pan_degree;                     // load degrees into pan_mes
+        queue_pan.put(pan_mes);                             // load degrees into pan queu
+        
+        tilt_message_t *tilt_mes = mpool_tilt.alloc();
+        tilt_mes->tilt_degree = tilt_degree;                // load degrees into tilt_mes
+        queue_tilt.put(tilt_mes);                           // load degrees into Tilt queu
+        
+        lean_message_t *lean_mes = mpool_lean.alloc();
+        lean_mes->lean_degree = lean_degree;                // load degrees into lean_mes
+        queue_lean.put(lean_mes);                           // load degrees into lean queu
+        
+        //pc.printf("Thread buffer end\n");
+        Thread::wait(tw);
+        }
+        
+    
+    }
+}
