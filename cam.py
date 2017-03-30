@@ -82,7 +82,7 @@ while True:
 			print"radius", radius																								# DEBUG PRINTS
 			print"center", centero
 			print "Line len", len(BUFFER)
-			print "Buffer", BUFFER
+			print ("Buffer", BUFFER)
 	#Find faces
 	if not OBJECT:																												# Toggles object/Face
 		faces = face_cascade.detectMultiScale(gray_image,																		# Use cascade
@@ -136,9 +136,9 @@ while True:
 	6 display = np.hstack([frame,frame2])
 	"""
 	if OBJECT:
-		cv2.imshow('Video', frame2)										# Show video stream
+		cv2.imshow('Object Video', frame2)										# Show video stream
 	else:
-		cv2.imshow('Video', frame)
+		cv2.imshow('Face Video', frame)
 	#THIS IS NOT WORKING CORRECTLY 
 	if TIME:															# Toggle Time
 		end = time.time()
@@ -166,5 +166,4 @@ while True:
 		OBJECT = not OBJECT
 
 video_capture.release()
-out.release()
 cv2.destroyAllWindows()

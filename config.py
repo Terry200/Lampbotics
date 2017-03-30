@@ -5,7 +5,7 @@ import argparse
 #cv2.namedWindow("video", cv2.WINDOW_AUTOSIZE) # | cv2.WINDOW_KEEPRATIO)
 """ DEVELOPMENT"""
 # Change To write out on serial
-WRITE = True
+WRITE = False
 # Change press d when Program is running
 DEBUG = True
 # -------------------------------------------------
@@ -46,10 +46,9 @@ KNOWN_W = 15.0
 CONVERT = 175
 BUFFER = None
 DISTANCE = 0
+ser = None
+radius = None
 #--------------------------------
-# list of tracked points
-pts = deque(maxlen=args["buffer"])
-#---------------------------------------------
 # construct the argument parse and parse the arguments
 ap = argparse.ArgumentParser()
 ap.add_argument("-v", "--video",
@@ -60,6 +59,8 @@ args = vars(ap.parse_args())
 # define the lower and upper boundaries of the "green"
 # ball in the HSV color space, then initialize the
 # list of tracked points
+pts = deque(maxlen=args["buffer"])
+#---------------------------------------------
 """Colour To MASK"""
 red_low = (136, 87,111)
 red_up =  (180, 255,255)
